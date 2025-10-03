@@ -51,3 +51,110 @@ def parse_json(data):
 ######################################################################
 # INSERT CODE HERE
 ######################################################################
+
+@app.route('/health')
+def get_health():
+    return ({"status": "OK"})
+
+@app.route('/count')
+def get_count():
+    try:
+        if songs_list and len(songs_list) > 0:
+            return ({"count":len(songs_list)})
+        else:
+            return ({"message": "Songs list is empty"}, 404)
+    except NameError:
+        return ({"message" "Songs list not defined"}, 500)
+
+@app.route('/song')
+def songs():
+    try:
+        songs = db.songs.find({})
+        songs_list = list(songs)
+
+        if not songs_list:
+            return ({"message": "No songs found"}, 404)
+
+        return json_util.dumps({"songs": songs_list})
+
+    except Exception as e:
+        app.logger.error(f"Error retrieving songs: {str(e)}")
+        return ({"message": "Internal Server Error"}, 500)
+
+@app.route('/song/<int:id>', methods=['GET'])
+def get_song_by_id(id):
+    try:
+        id = int(id)
+        song = db.songs.find_one({"id": id})
+
+        if not song:
+            return ({"message": f"Song with id {id} not found"}, 404)
+        
+        return (json_util.dumps(song))
+
+    except Exception as e:
+        app.logger.error(f"Error retrieving song: {str(e)}")
+        return ({"message": "Internal Server Error"}, 500)
+
+@app.route('/song', methods=['POST'])
+def create_song():
+    try:
+        new_song = request.get_json()
+
+        if not new_song or "id" not in new_song or "title" not in new_song or "lyrics" not in new_song:
+            return ({"message": "Required fields not provided"}, 400)
+        
+        existing_song = db.songs.find_one({"id": new_song["id"]})
+        if existing_song:
+            return ({"Message": f"song with id {new_song['id']} already present"}, 302)
+
+        result = db.songs.insert_one(new_song)
+        return ({"inserted id": str(result.inserted_id)}, 201)
+
+    except Exception as e:
+        app.logger.error(f"Error creating song: {str(e)}")
+        return ({"message": "Internal Server Error"}, 500)
+
+@app.route('/song/<int:id>', methods=['PUT'])
+def update_song(id):
+    try:
+        updated_song = request.get_json()
+        update_id = int(id)
+
+        if not updated_song:
+            return ({"message": "Required fields not provided"}, 400)
+
+        existing_song = db.songs.find_one({"id": update_id})
+
+        if not existing_song:
+            return ({"message": "Song not found"}, 404)
+
+        result = db.songs.update_one({"id":update_id}, {"$set": updated_song})
+
+        if result.modified_count > 0:
+            updated_song = db.songs.find_one({"id": update_id})
+            return (json_util.dumps(updated_song), 201)
+        else:
+            return ({"message": "song found, but nothing updated"}), 200
+
+        updated_song = db.songs.find_one({"id": update_id})
+    
+    except Exception as e:
+        app.logger.error(f"Error updating song: {str(e)}")
+        return ({"message": "Internal Server Error"}, 500)
+    
+@app.route('/song/<int:id>', methods=['DELETE'])
+def delete_song(id):
+    try:
+        delete_id = int(id)
+
+        result = db.songs.delete_one({"id": delete_id})
+
+        if result.deleted_count == 0:
+            return ({"message": "song not found"}, 404)
+        
+        return ('', 204)
+
+    except Exception as e:
+        app.logger.error(f"Error deleting song: {str(e)}")
+        return ({"message": "Internal Server Error"}, 500)
